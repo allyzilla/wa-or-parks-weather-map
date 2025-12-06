@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WA/OR Parks + GHCN Stations</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style> html,body,#map{height:100%;margin:0;padding:0} </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map').setView([46.5, -122.5], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'OSM'
+    }).addTo(map);
+
+    async function loadStations() {
+      console.log("Fetching GHCN station list...");
+      const resp = await fetch('https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt');
+      const text = await resp.text();
+      const lines = text.split('\\n');
+      let count = 0;
+      for (let line of lines) {
+        if (!line) continue;
+        // according to GHCN format: id 1-11, lat 13-20, lon 22-30, state 39-40, name 42-71
+        const id = line.substr(0,11).trim();
+        const lat = parseFloat(line.substr(12,8));
+        const lon = parseFloat(line.substr(21,9));
+        const state = line.substr(38,2).trim();
+        const name = line.substr(41,30).trim();
+        if ((state === 'WA' || state === 'OR') && !isNaN(lat) && !isNaN(lon)) {
+          L.circleMarker([lat, lon], {radius: 3, color: '#3388ff'}).addTo(map)
+            .bindPopup(`${id} — ${name}, ${state}`);
+          count += 1;
+        }
+      }
+      console.log("Plotted stations:", count);
+    }
+
+    async function loadParks() {
+      console.log("Fetching PAD-US protected areas...");
+      const url = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Protected_Areas_State/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
+      const resp = await fetch(url);
+      const geo = await resp.json();
+      const filtered = geo;  // skip attribute filtering — show all for debugging
+      L.geoJSON(filtered, {style:{color:'#228B22', weight:1, fillOpacity:0.05}}).addTo(map);
+      console.log("Parks layer added:", filtered.features.length, "features");
+    }
+
+    loadParks();
+    loadStations();
+  </script>
+</body>
+</html>
